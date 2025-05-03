@@ -3,7 +3,14 @@
 ## Bemutatás
 A `dnd-notify` egy egyszerű, de sokoldalú értesítési rendszer FiveM szerverekhez. A rendszer lehetővé teszi, hogy különböző típusú, stílusú és pozíciójú értesítéseket jelenítsen meg a játékosok számára.
 
-![Kép az értesítésekről](https://i.imgur.com/placeholder.png)
+### Értesítési típusok
+
+| Típus | Kép |
+|-------|-----|
+| **Success** | ![Success értesítés](https://i.imgur.com/0W7nxQF.png) |
+| **Warning** | ![Warning értesítés](https://i.imgur.com/uo7PRlQ.png) |
+| **Error** | ![Error értesítés](https://i.imgur.com/UBVFD6U.png) |
+| **Info** | ![Info értesítés](https://i.imgur.com/xxKqvvm.png) |
 
 ## Jellemzők
 - **9 különböző pozíció** az értesítések megjelenítéséhez

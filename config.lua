@@ -1,7 +1,7 @@
 Config = {}
 
 -- Enable or disable test command (/testnotify)
-Config.EnableTestCommand = false
+Config.EnableTestCommand = true
 
 -- Default position for notifications
 -- Available positions: 'top-left', 'top-center', 'top-right', 
