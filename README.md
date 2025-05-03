@@ -78,6 +78,7 @@ Config.NotificationTypes = {
 exports['dnd-notify']:SendNotification({
     type = 'success',           -- success, error, info, warning
     message = 'Sikeres művelet!',
+    title = '',
     position = 'top-right',     -- opcionális
     duration = 5000             -- opcionális, milliszekundumban
 })
@@ -87,6 +88,7 @@ exports['dnd-notify']:SendNotification({
 ```lua
 TriggerEvent('dnd-notify:showNotification', {
     type = 'info',
+    title = '',
     message = 'Ez egy információs értesítés'
 })
 ```
