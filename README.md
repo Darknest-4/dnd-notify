@@ -9,10 +9,7 @@ A `dnd-notify` egy egyszerű, de sokoldalú értesítési rendszer FiveM szerver
 
 | Típus | Kép |
 |-------|-----|
-| **Success** | ![Success értesítés](https://i.imgur.com/0W7nxQF.png) |
-| **Warning** | ![Warning értesítés](https://i.imgur.com/uo7PRlQ.png) |
-| **Error** | ![Error értesítés](https://i.imgur.com/UBVFD6U.png) |
-| **Info** | ![Info értesítés](https://i.imgur.com/xxKqvvm.png) |
+| **KÉP** | ![KÉP](https://i.imgur.com/z44fTr9.png) |
 
 ## Jellemzők
 - **9 különböző pozíció** az értesítések megjelenítéséhez
