@@ -9,7 +9,6 @@ Config.EnableTestCommand = true
 --                      'bottom-left', 'bottom-center', 'bottom-right'
 Config.DefaultPosition = 'top-right'
 
--- Notification styles
 Config.Notifications = {
     BackgroundColor = 'rgba(20, 20, 40, 0.85)',
     TextColor = '#ffffff',
@@ -17,6 +16,8 @@ Config.Notifications = {
     BorderRadius = '8px',
     FontSize = '14px',
     Width = '320px',
+    MinWidth = '300px',
+    MinHeight = '80px',
     Padding = '12px',
     MarginBottom = '8px',
     Duration = 4000 -- milliseconds

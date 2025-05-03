@@ -1,5 +1,7 @@
 # DND Notify - FiveM Értesítési Rendszer
 
+> A dnd-notify egy letisztult, könnyen használható és rugalmas értesítési rendszer FiveM szerverekhez. Egyéni stílusjegyekkel és sok beállítási lehetőséggel rendelkezik. Különböző típusú értesítéseket (siker, hiba, információ, figyelmeztetés) jelenithetsz meg a képernyő bármely pozíciójában. A rendszer könnyen integrálható más scriptekkel, és gyors készítésre lett optimalizálva.
+
 ## Bemutatás
 A `dnd-notify` egy egyszerű, de sokoldalú értesítési rendszer FiveM szerverekhez. A rendszer lehetővé teszi, hogy különböző típusú, stílusú és pozíciójú értesítéseket jelenítsen meg a játékosok számára.
 

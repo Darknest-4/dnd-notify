@@ -42,7 +42,11 @@ function generateId() {
     return 'notification-' + Math.random().toString(36).substr(2, 9);
 }
 
+let activeNotifications = new Set();
+
 function formatMessage(message) {
+    if (!message) return '';
+    
     message = message.replace(/~r~/g, '<span style="color: #e74c3c;">');
     message = message.replace(/~g~/g, '<span style="color: #2ecc71;">');
     message = message.replace(/~b~/g, '<span style="color: #3498db;">');
@@ -53,6 +57,11 @@ function formatMessage(message) {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     message = message.replace(urlRegex, '<a href="$1" target="_blank">$1</a>');
     
+    message = message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    message = message.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    message = message.replace(/~~(.*?)~~/g, '<del>$1</del>');
+    message = message.replace(/`(.*?)`/g, '<code>$1</code>');
+    
     return message;
 }
 
@@ -62,6 +71,10 @@ function showNotification(data) {
     
     if (!container) return;
     
+    if (data.id && activeNotifications.has(data.id)) {
+        return data.id;
+    }
+    
     const existingNotifications = container.querySelectorAll('.notification');
     if (existingNotifications.length >= MAX_NOTIFICATIONS) {
         const oldestNotification = existingNotifications[0];
@@ -70,6 +83,8 @@ function showNotification(data) {
             setTimeout(() => {
                 if (oldestNotification.parentNode) {
                     oldestNotification.parentNode.removeChild(oldestNotification);
+                    const notificationId = oldestNotification.getAttribute('data-unique-id');
+                    if (notificationId) activeNotifications.delete(notificationId);
                 }
             }, 300);
         }
@@ -81,27 +96,62 @@ function showNotification(data) {
     
     const notificationType = config.notificationTypes[type];
     
-    const id = generateId();
+    const id = data.id || generateId();
+    if (data.id) activeNotifications.add(data.id);
+    
     const notification = document.createElement('div');
     notification.id = id;
     notification.className = 'notification';
+    notification.setAttribute('data-unique-id', data.id || '');
     notification.style.backgroundColor = notificationType.backgroundColor;
     notification.style.color = config.notificationStyles.TextColor;
     notification.style.borderLeft = `${config.notificationStyles.BorderWidth} solid ${notificationType.borderColor}`;
     notification.style.borderRadius = config.notificationStyles.BorderRadius;
+    notification.style.width = config.notificationStyles.Width;
+    notification.style.minWidth = config.notificationStyles.MinWidth || '300px';
+    notification.style.minHeight = config.notificationStyles.MinHeight || '80px';
     
     const iconDiv = document.createElement('div');
     iconDiv.className = 'notification-icon';
-    iconDiv.innerHTML = notificationType.icon;
-    iconDiv.style.color = notificationType.borderColor;
+    iconDiv.innerHTML = data.icon || notificationType.icon;
+    iconDiv.style.color = data.iconColor || notificationType.borderColor;
+    
+    if (data.iconAnimation) {
+        iconDiv.classList.add(`fa-${data.iconAnimation}`);
+    }
+    
+    if (data.alignIcon) {
+        iconDiv.style.alignSelf = data.alignIcon === 'top' ? 'flex-start' : 'center';
+    }
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'notification-content';
-    contentDiv.innerHTML = formatMessage(data.message);
+    
+    if (data.title) {
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'notification-title';
+        titleDiv.innerHTML = formatMessage(data.title);
+        contentDiv.appendChild(titleDiv);
+    }
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'notification-message';
+    messageDiv.innerHTML = formatMessage(data.description || data.message);
+    contentDiv.appendChild(messageDiv);
     
     const progressBar = document.createElement('div');
     progressBar.className = 'notification-progress';
     progressBar.style.backgroundColor = notificationType.borderColor;
+    
+    if (data.showDuration === false) {
+        progressBar.style.display = 'none';
+    }
+    
+    if (data.style) {
+        for (const [key, value] of Object.entries(data.style)) {
+            notification.style[key] = value;
+        }
+    }
     
     notification.appendChild(iconDiv);
     notification.appendChild(contentDiv);
@@ -111,6 +161,19 @@ function showNotification(data) {
         container.insertBefore(notification, container.firstChild);
     } else {
         container.appendChild(notification);
+    }
+    
+    if (data.sound) {
+        if (data.sound.name) {
+            const soundSet = data.sound.set || '';
+            const soundBank = data.sound.bank || '';
+            SendNUIMessage({
+                action: 'playSound',
+                name: data.sound.name,
+                set: soundSet,
+                bank: soundBank
+            });
+        }
     }
     
     const duration = data.duration || config.notificationStyles.Duration;
@@ -126,6 +189,7 @@ function showNotification(data) {
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
+                if (data.id) activeNotifications.delete(data.id);
             }
         }, 300);
     }, duration);

@@ -1,7 +1,7 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'DND Development'
+author 'DND Development (Darknest_!)'
 description 'Simple Notification System'
 version '1.0.0'
 
