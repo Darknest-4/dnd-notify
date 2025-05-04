@@ -1,15 +1,85 @@
 local isResourceReady = false
+local validActions = {
+    initialize = true,
+    updateConfig = true,
+    showNotification = true,
+    changePosition = true,
+    playSound = true
+}
+
+local notificationHistory = {}
+local maxNotificationsPerMinute = 20 -- Limit to prevent spam
+local notificationTimeWindow = 60000 -- 1 minute in ms
+
+local function isValidType(data, expectedType)
+    return type(data) == expectedType
+end
+
+local function sanitizeNUIMessage(data)
+    if not isValidType(data, "table") then return nil end
+    if not isValidType(data.action, "string") then return nil end
+    if not validActions[data.action] then return nil end
+    
+    local sanitizedData = {
+        action = data.action
+    }
+    
+    if data.config and data.action == "updateConfig" then
+        sanitizedData.config = {}
+        if isValidType(data.config.defaultPosition, "string") then
+            sanitizedData.config.defaultPosition = data.config.defaultPosition
+        end
+        
+        if isValidType(data.config.notificationStyles, "table") then
+            sanitizedData.config.notificationStyles = {}
+            for k, v in pairs(data.config.notificationStyles) do
+                if isValidType(k, "string") and (isValidType(v, "string") or isValidType(v, "number")) then
+                    sanitizedData.config.notificationStyles[k] = v
+                end
+            end
+        end
+        
+        if isValidType(data.config.notificationTypes, "table") then
+            sanitizedData.config.notificationTypes = {}
+            for k, v in pairs(data.config.notificationTypes) do
+                if isValidType(k, "string") and isValidType(v, "table") then
+                    sanitizedData.config.notificationTypes[k] = {}
+                    for subK, subV in pairs(v) do
+                        if isValidType(subK, "string") and isValidType(subV, "string") then
+                            sanitizedData.config.notificationTypes[k][subK] = subV
+                        end
+                    end
+                end
+            end
+        end
+    elseif data.position and data.action == "changePosition" then
+        sanitizedData.position = data.position
+    elseif data.data and data.action == "showNotification" then
+        sanitizedData.data = data.data
+    end
+    
+    return sanitizedData
+end
+
+local function SafeSendNUIMessage(data)
+    local sanitized = sanitizeNUIMessage(data)
+    if sanitized then
+        SendNUIMessage(sanitized)
+    else
+        print("[dnd-notify] Blocked malformed NUI message")
+    end
+end
 
 CreateThread(function()
     SetNuiFocus(false, false)
     
-    SendNUIMessage({
+    SafeSendNUIMessage({
         action = 'initialize'
     })
     
     Wait(200)
     
-    SendNUIMessage({
+    SafeSendNUIMessage({
         action = 'updateConfig',
         config = {
             defaultPosition = Config.DefaultPosition,
@@ -22,41 +92,139 @@ CreateThread(function()
     isResourceReady = true
 end)
 
+local function sanitizeString(str)
+    if not isValidType(str, 'string') then return '' end
+    
+    local sanitized = str:gsub('<script.->(.-)</script>', '')
+                        :gsub('<iframe.->(.-)</iframe>', '')
+                        :gsub('javascript:', '')
+                        :gsub('onerror=', '')
+                        :gsub('onload=', '')
+    
+    return sanitized
+end
+
+local function checkRateLimit()
+    local currentTime = GetGameTimer()
+    local count = 0
+    
+    for i = #notificationHistory, 1, -1 do
+        if currentTime - notificationHistory[i] > notificationTimeWindow then
+            table.remove(notificationHistory, i)
+        else
+            count = count + 1
+        end
+    end
+    
+    if count >= maxNotificationsPerMinute then
+        return false
+    end
+    
+    table.insert(notificationHistory, currentTime)
+    return true
+end
+
 function SendNotification(data)
     if not isResourceReady then return end
     
+    if not checkRateLimit() then
+        print("[dnd-notify] Rate limit exceeded, notification blocked")
+        return
+    end
+    
+    local sanitizedData = {}
+    
     if type(data) == 'table' then
         if data.type == 'success' or data.type == 'error' or data.type == 'info' or data.type == 'warning' then
+            sanitizedData.type = data.type
         elseif data.type == 'inform' then
-            data.type = 'info'
+            sanitizedData.type = 'info'
+        else
+            sanitizedData.type = 'info'
         end
         
-        data.type = data.type or 'info'
-        data.title = data.title or ''
-        data.message = data.message or data.description or ''
-        data.position = data.position or Config.DefaultPosition
-        data.duration = data.duration or Config.Notifications.Duration
+        sanitizedData.title = sanitizeString(data.title or '')
+        sanitizedData.message = sanitizeString(data.message or data.description or '')
         
-        if data.showDuration == nil then
-            data.showDuration = true
+        local validPositions = {
+            ['top-left'] = true, ['top-center'] = true, ['top-right'] = true,
+            ['middle-left'] = true, ['middle-center'] = true, ['middle-right'] = true, 
+            ['bottom-left'] = true, ['bottom-center'] = true, ['bottom-right'] = true
+        }
+        
+        if data.position and validPositions[data.position] then
+            sanitizedData.position = data.position
+        else
+            sanitizedData.position = Config.DefaultPosition
         end
         
-        if not data.style then
-            data.style = {}
+        if type(data.duration) == 'number' and data.duration >= 1000 and data.duration <= 30000 then
+            sanitizedData.duration = data.duration
+        else
+            sanitizedData.duration = Config.Notifications.Duration
+        end
+        
+        sanitizedData.showDuration = data.showDuration == true
+        
+        if type(data.id) == 'string' then
+            sanitizedData.id = data.id:sub(1, 64)
+        end
+        
+        if type(data.style) == 'table' then
+            sanitizedData.style = {}
+            for k, v in pairs(data.style) do
+                if type(k) == 'string' and type(v) == 'string' and
+                   not v:match('javascript:') and not v:match('expression') then
+                    sanitizedData.style[k] = v
+                end
+            end
+        else
+            sanitizedData.style = {}
+        end
+        
+        if type(data.icon) == 'string' then
+            if data.icon:match('^<i class="fa[srlbd]? fa%-[%w%-]+"></i>$') then
+                sanitizedData.icon = data.icon
+            end
+        end
+        
+        if type(data.iconColor) == 'string' then
+            sanitizedData.iconColor = data.iconColor
+        end
+        
+        if type(data.iconAnimation) == 'string' then
+            local safeAnimations = {spin = true, pulse = true, shake = true}
+            if safeAnimations[data.iconAnimation] then
+                sanitizedData.iconAnimation = data.iconAnimation
+            end
+        end
+        
+        if type(data.alignIcon) == 'string' then
+            if data.alignIcon == 'top' or data.alignIcon == 'center' then
+                sanitizedData.alignIcon = data.alignIcon
+            end
+        end
+        
+        if type(data.sound) == 'table' and type(data.sound.name) == 'string' then
+            sanitizedData.sound = {
+                name = data.sound.name:sub(1, 64),
+                set = type(data.sound.set) == 'string' and data.sound.set:sub(1, 64) or '',
+                bank = type(data.sound.bank) == 'string' and data.sound.bank:sub(1, 64) or ''
+            }
         end
     else
-        data = {
+        sanitizedData = {
             type = 'info',
-            message = tostring(data),
+            message = sanitizeString(tostring(data)),
             position = Config.DefaultPosition,
             duration = Config.Notifications.Duration,
             showDuration = true
         }
     end
     
-    SendNUIMessage({
+    SafeSendNUIMessage({
         action = 'showNotification',
-        data = data
+        data = sanitizedData
     })
 end
 
@@ -69,13 +237,19 @@ end)
 
 RegisterNUICallback('nuiReady', function(data, cb)
     isResourceReady = true
-    cb('ok')
+    cb({status = 'ok'})
 end)
 
 RegisterNetEvent('dnd-notify:changePosition')
 AddEventHandler('dnd-notify:changePosition', function(position)
-    if position then
-        SendNUIMessage({
+    local validPositions = {
+        ['top-left'] = true, ['top-center'] = true, ['top-right'] = true,
+        ['middle-left'] = true, ['middle-center'] = true, ['middle-right'] = true, 
+        ['bottom-left'] = true, ['bottom-center'] = true, ['bottom-right'] = true
+    }
+    
+    if position and validPositions[position] then
+        SafeSendNUIMessage({
             action = 'changePosition',
             position = position
         })
@@ -125,7 +299,7 @@ if Config.EnableTestCommand then
         })
     end, false)
     
-    TriggerEvent('chat:addSuggestion', '/testnotify', 'Test the notification system v2', {
+    TriggerEvent('chat:addSuggestion', '/testnotify', 'Test the notification system', {
         { name = 'type', help = 'Notification type (success, error, info, warning, all)' },
         { name = 'message/position', help = 'Message or position when using "all"' },
         { name = 'title/duration', help = 'Title or duration when using "all"' },

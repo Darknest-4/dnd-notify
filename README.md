@@ -153,6 +153,85 @@ function Config.Notify(message, type)
 end
 ```
 
+## es_extended beállítása dnd-notify használatához
+
+A dnd-notify rendszer könnyen integrálható az es_extended keretrendszerbe, hogy az alapértelmezett értesítési rendszerként működjön. Kövesd az alábbi lépéseket:
+
+### 1. Módosítsd az es_extended konfigurációs fájlt
+
+Nyisd meg az `es_extended/config.lua` fájlt, és keresd meg az értesítésekre vonatkozó részt. Általában van ott egy `Config.Notification` beállítás.
+
+### 2. Az ESX ShowNotification funkció felülírása
+
+A következő kódot add hozzá az `es_extended/client/functions.lua` fájlhoz (a fájl vége felé):
+
+```lua
+-- Eredeti ESX.ShowNotification funkció felülírása dnd-notify használatához
+ESX.ShowNotification = function(message, type, duration)
+    if not message then return end
+    
+    local notificationType = type or 'info' -- alapértelmezett típus: info
+    local notificationDuration = duration or 5000 -- alapértelmezett időtartam: 5000ms
+    
+    -- dnd-notify meghívása
+    exports['dnd-notify']:SendNotification({
+        type = notificationType,
+        message = message,
+        duration = notificationDuration
+    })
+end
+
+-- ESX.ShowAdvancedNotification funkció felülírása (ha szükséges)
+ESX.ShowAdvancedNotification = function(title, subject, msg, icon, iconType, duration)
+    if not msg then return end
+    
+    -- Értesítés típus meghatározása az iconType alapján
+    local notificationType = 'info'
+    if iconType == 1 then notificationType = 'info'
+    elseif iconType == 2 then notificationType = 'warning'
+    elseif iconType == 3 then notificationType = 'error'
+    elseif iconType == 7 then notificationType = 'success'
+    end
+    
+    local notificationDuration = duration or 5000
+    
+    -- dnd-notify meghívása fejlett értesítéshez
+    exports['dnd-notify']:SendNotification({
+        type = notificationType,
+        title = title,
+        message = msg,
+        duration = notificationDuration
+    })
+end
+
+-- ESX.ShowHelpNotification funkció felülírása (ha szükséges)
+ESX.ShowHelpNotification = function(message, thisFrame, beep, duration)
+    if not message then return end
+    
+    local notificationDuration = duration or 5000
+    
+    -- dnd-notify meghívása segítséghez
+    exports['dnd-notify']:SendNotification({
+        type = 'info',
+        message = message,
+        duration = notificationDuration
+    })
+end
+```
+
+### 3. Ellenőrizd a server.cfg fájlt
+
+Győződj meg róla, hogy a dnd-notify előbb töltődik be, mint az es_extended:
+
+```
+ensure dnd-notify
+ensure es_extended
+```
+
+### 4. Újraindítás
+
+Indítsd újra a szervert a változtatások érvénybe léptetéséhez. Most már az ESX alapértelmezett értesítései helyett a dnd-notify rendszert fogja használni a szerver.
+
 ## Hibaelhárítás
 
 ### Fekete háttér probléma

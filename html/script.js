@@ -47,6 +47,22 @@ let activeNotifications = new Set();
 function formatMessage(message) {
     if (!message) return '';
     
+    if (typeof message !== 'string') {
+        console.error('Invalid message type received');
+        return '';
+    }
+    
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+    
+    message = escapeHtml(message);
+    
     message = message.replace(/~r~/g, '<span style="color: #e74c3c;">');
     message = message.replace(/~g~/g, '<span style="color: #2ecc71;">');
     message = message.replace(/~b~/g, '<span style="color: #3498db;">');
@@ -55,7 +71,13 @@ function formatMessage(message) {
     message = message.replace(/~s~/g, '</span>');
     
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    message = message.replace(urlRegex, '<a href="$1" target="_blank">$1</a>');
+    message = message.replace(urlRegex, function(match) {
+        if (match.startsWith('http://') || match.startsWith('https://')) {
+            const sanitizedUrl = match.replace(/[\(\)\[\]<>"']/g, '');
+            return '<a href="' + sanitizedUrl + '" target="_blank" rel="noopener noreferrer">' + sanitizedUrl + '</a>';
+        }
+        return match;
+    });
     
     message = message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     message = message.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -204,39 +226,140 @@ function changePosition(position) {
 }
 
 window.addEventListener('message', function(event) {
-    const data = event.data;
-    
-    if (data.action === 'showNotification') {
-        showNotification(data.data);
-    } else if (data.action === 'changePosition') {
-        changePosition(data.position);
-    } else if (data.action === 'updateConfig') {
-        if (data.config) {
-            if (data.config.defaultPosition) 
-                config.defaultPosition = data.config.defaultPosition;
-            
-            if (data.config.notificationStyles) 
-                config.notificationStyles = data.config.notificationStyles;
-            
-            if (data.config.notificationTypes) 
-                config.notificationTypes = data.config.notificationTypes;
+    try {
+        if (!event.data || typeof event.data !== 'object') {
+            return;
         }
-    } else if (data.action === 'initialize') {
-        document.documentElement.style.backgroundColor = 'transparent';
-        document.body.style.backgroundColor = 'transparent';
+        
+        const data = event.data;
+        
+        const allowedActions = ['showNotification', 'changePosition', 'updateConfig', 'initialize', 'playSound'];
+        if (!data.action || !allowedActions.includes(data.action)) {
+            console.error('Invalid action received:', data.action);
+            return;
+        }
+        
+        if (data.action === 'showNotification') {
+            if (data.data && typeof data.data === 'object') {
+                showNotification(data.data);
+            }
+        } else if (data.action === 'changePosition') {
+            // Validate position
+            const validPositions = [
+                'top-left', 'top-center', 'top-right',
+                'middle-left', 'middle-center', 'middle-right',
+                'bottom-left', 'bottom-center', 'bottom-right'
+            ];
+            
+            if (data.position && validPositions.includes(data.position)) {
+                changePosition(data.position);
+            }
+        } else if (data.action === 'updateConfig') {
+            if (data.config && typeof data.config === 'object') {
+                if (data.config.defaultPosition && typeof data.config.defaultPosition === 'string') {
+                    const validPositions = [
+                        'top-left', 'top-center', 'top-right',
+                        'middle-left', 'middle-center', 'middle-right',
+                        'bottom-left', 'bottom-center', 'bottom-right'
+                    ];
+                    
+                    if (validPositions.includes(data.config.defaultPosition)) {
+                        config.defaultPosition = data.config.defaultPosition;
+                        config.currentPosition = data.config.defaultPosition;
+                    }
+                }
+                
+                if (data.config.notificationStyles && typeof data.config.notificationStyles === 'object') {
+                    const safeStyles = {};
+                    const allowedStyleProps = ['BackgroundColor', 'TextColor', 'BorderWidth', 'BorderRadius',
+                                           'FontSize', 'Width', 'MinWidth', 'MinHeight', 'Padding', 
+                                           'MarginBottom', 'Duration'];
+                    
+                    for (const prop of allowedStyleProps) {
+                        if (data.config.notificationStyles[prop] !== undefined) {
+                            if (prop === 'Duration') {
+                                const duration = parseInt(data.config.notificationStyles[prop]);
+                                if (!isNaN(duration) && duration >= 1000 && duration <= 30000) {
+                                    safeStyles[prop] = duration;
+                                }
+                            } else if (typeof data.config.notificationStyles[prop] === 'string') {
+                                if (!data.config.notificationStyles[prop].includes('javascript:') && 
+                                    !data.config.notificationStyles[prop].includes('expression')) {
+                                    safeStyles[prop] = data.config.notificationStyles[prop];
+                                }
+                            }
+                        }
+                    }
+                    
+                    Object.assign(config.notificationStyles, safeStyles);
+                }
+                
+                if (data.config.notificationTypes && typeof data.config.notificationTypes === 'object') {
+                    const safeTypes = {};
+                    const allowedTypes = ['success', 'error', 'info', 'warning'];
+                    
+                    for (const type of allowedTypes) {
+                        if (data.config.notificationTypes[type] && 
+                            typeof data.config.notificationTypes[type] === 'object') {
+                            
+                            safeTypes[type] = {};
+                            const typeData = data.config.notificationTypes[type];
+                            
+                            if (typeData.icon && typeof typeData.icon === 'string') {
+                                if (typeData.icon.match(/^<i class="fa[srlbd]? fa-[\w-]+"><\/i>$/)) {
+                                    safeTypes[type].icon = typeData.icon;
+                                }
+                            }
+                            
+                            if (typeData.borderColor && typeof typeData.borderColor === 'string') {
+                                safeTypes[type].borderColor = typeData.borderColor;
+                            }
+                            
+                            if (typeData.backgroundColor && typeof typeData.backgroundColor === 'string') {
+                                safeTypes[type].backgroundColor = typeData.backgroundColor;
+                            }
+                        }
+                    }
+                    
+                    for (const type in safeTypes) {
+                        if (config.notificationTypes[type]) {
+                            Object.assign(config.notificationTypes[type], safeTypes[type]);
+                        }
+                    }
+                }
+            }
+        } else if (data.action === 'initialize') {
+            document.documentElement.style.backgroundColor = 'transparent';
+            document.body.style.backgroundColor = 'transparent';
+        } else if (data.action === 'playSound') {
+        }
+    } catch (error) {
+        console.error('Error processing NUI message:', error);
     }
 });
 
 window.onload = function() {
-    document.documentElement.style.backgroundColor = 'transparent';
-    document.body.style.backgroundColor = 'transparent';
-    
-    fetch(`https://${GetParentResourceName()}/nuiReady`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: JSON.stringify({})
-    }).catch(() => {
-    });
+    try {
+        document.documentElement.style.backgroundColor = 'transparent';
+        document.body.style.backgroundColor = 'transparent';
+        
+        let resourceName;
+        try {
+            resourceName = GetParentResourceName();
+        } catch (e) {
+            console.log('GetParentResourceName not available, using fallback');
+            resourceName = 'dnd-notify';
+        }
+        
+        fetch(`https://${resourceName}/nuiReady`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: JSON.stringify({})
+        }).catch(() => {
+        });
+    } catch (error) {
+        console.error('Error in window.onload:', error);
+    }
 };

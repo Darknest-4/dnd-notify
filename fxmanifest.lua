@@ -1,8 +1,8 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'DND Development (Darknest_!)'
-description 'Simple Notification System'
+author 'DnD Development ( Darknest_4 )'
+description 'Notification System'
 version '1.0.0'
 
 ui_page 'html/index.html'
@@ -14,7 +14,6 @@ client_scripts {
 
 server_scripts {
     'config.lua',
-    'server/main.lua'
 }
 
 files {
